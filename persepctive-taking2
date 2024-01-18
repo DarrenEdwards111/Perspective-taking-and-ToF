@@ -1,0 +1,44 @@
+class PerspectiveTaking:
+
+    def __init__(self):
+        # Initial emotional states of different persons
+        self.emotions = {}
+
+    def set_emotional_state(self, person, emotion):
+        """Set the initial emotional state for a person."""
+        self.emotions[person] = emotion
+
+    def perspective_transformation(self, observer, observed):
+        """Observer takes on the perspective of the observed."""
+        if observed not in self.emotions:
+            print(f"Error: Emotional state for {observed} not defined.")
+            return
+        self.emotions[observer] = self.emotions[observed]
+
+    def get_emotional_state(self, person):
+        """Get the current emotional state of a person."""
+        return self.emotions.get(person, None)
+
+    def display_emotional_states(self):
+        """Display the emotional states of all persons."""
+        for person, emotion in self.emotions.items():
+            print(f"{person}'s emotional state: {emotion}")
+
+
+if __name__ == "__main__":
+    pt = PerspectiveTaking()
+
+    # Set initial emotional states
+    pt.set_emotional_state("PersonA", "neutral")
+    pt.set_emotional_state("PersonB", "pain")
+
+    # Display initial states
+    print("Initial emotional states:")
+    pt.display_emotional_states()
+
+    # Perform perspective transformation: PersonA takes on the perspective of PersonB
+    pt.perspective_transformation("PersonA", "PersonB")
+
+    # Display transformed states
+    print("\nEmotional states after perspective-taking:")
+    pt.display_emotional_states()
