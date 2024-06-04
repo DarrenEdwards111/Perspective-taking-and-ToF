@@ -1,0 +1,214 @@
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.cluster import DBSCAN
+
+# Create a directed graph
+G = nx.DiGraph()
+
+# Define the nodes and their labels
+nodes = {
+    1: 'Person A "I"',
+    2: 'Person B "You"',
+    3: 'Person C',
+    4: 'Fear',
+    5: 'Snake',
+    6: 'Danger',
+    7: 'Poisonous',
+    8: 'Bites if stepped on',
+    9: 'Woods',
+    10: 'Location 1A "Here"',
+    11: 'Location 1B "There"',
+    12: 'Location 2A "There"',
+    13: 'Location 2B "Then"',
+    14: 'Event 1A "Now"',
+    15: 'Event 1A "Then, future"',
+    16: 'Event 2A "Then, past"',
+    17: 'Event 2B "Now"'
+}
+
+# Add the new nodes for Person C
+nodes.update({
+    18: 'Location 1C "Here"',
+    19: 'Event 1C "Now"'
+})
+
+# Add nodes to the graph
+for node, label in nodes.items():
+    G.add_node(node, label=label)
+
+# Define the edges and their types
+edges = [
+    (1, 2, 'P'), (1, 9, 'S'), (1, 10, 'S'), (1, 12, 'S'), (1, 13, 'T'),
+    (1, 14, 'T'), (1, 15, 'T'), (1, 16, 'T'), (1, 17, 'T'),
+    (2, 5, 'S'), (2, 6, 'S'), (2, 7, 'S'), (2, 8, 'S'), (2, 9, 'S'),
+    (2, 10, 'S'), (2, 12, 'S'), (2, 13, 'T'), (2, 14, 'T'), (2, 16, 'T'), (2, 17, 'T'),
+    (3, 14, 'T'), (3, 10, 'S'), (3, 9, 'T'), (3, 13, 'T'),
+    (4, 5, 'C'), (4, 6, 'C'), (4, 7, 'C'), (4, 8, 'C'), (4, 9, 'C'),
+    (9, 10, 'S'), (9, 11, 'S'), (5, 6, 'C'), (5, 7, 'C'), (5, 8, 'C'),
+    (10, 14, 'S'), (10, 12, 'S'), (12, 15, 'T'), (12, 16, 'T'), (12, 17, 'T'),
+    (11, 2, 'T'), (13, 3, 'T'), (14, 3, 'T')
+]
+
+# Add edges for Person C
+edges.extend([
+    (3, 18, 'S'),  # Connect Person C to Location "Here"
+    (3, 19, 'T')   # Connect Person C to Event "Now"
+])
+
+# Add edges to the graph
+for u, v, rel in edges:
+    G.add_edge(u, v, relation=rel)
+
+# Define the color map for edges
+edge_colors = {
+    'P': 'orange', 'C': 'red', 'S': 'green', 'T': 'purple'
+}
+
+# Define the positions for the nodes
+pos = {
+    1: (0, 2), 2: (2, -1), 3: (-2, -1),
+    4: (1, 1), 5: (2, 2), 6: (2.5, 1.5), 7: (3, 2.5), 8: (3.5, 1.8),
+    9: (-1, 1), 10: (-2, 2), 11: (-2, 3), 12: (-0.5, 2.5), 13: (1.5, 3),
+    14: (-1.5, 2.5), 15: (-1.5, 3), 16: (0, 3.5), 17: (0.5, 3),
+    18: (-3, -1.5), 19: (-2.5, -0.5)  # Positions for the new nodes
+}
+
+# Get node labels
+labels = nx.get_node_attributes(G, 'label')
+
+# Perform DBSCAN clustering on the graph
+# Convert the graph to a distance matrix
+distances = nx.floyd_warshall_numpy(G)
+
+# Replace inf values with a large finite number
+distances[np.isinf(distances)] = np.max(distances[np.isfinite(distances)]) + 1
+
+# Scale the distance matrix to range [0, 1]
+scaler = MinMaxScaler()
+distances_scaled = scaler.fit_transform(distances)
+
+# Apply DBSCAN with appropriate eps and min_samples for clustering
+db = DBSCAN(eps=0.5, min_samples=2, metric='precomputed')
+cluster_labels = db.fit_predict(distances_scaled)
+
+# Ensure Person C and its connections are in their own cluster
+person_c_nodes = [3, 18, 19]
+person_c_cluster = cluster_labels[2]  # Person C is node 3 (index 2 in zero-based indexing)
+for i, label in enumerate(cluster_labels):
+    if i not in person_c_nodes and label == person_c_cluster:
+        cluster_labels[i] = 1 - person_c_cluster
+for node in person_c_nodes:
+    cluster_labels[node - 1] = person_c_cluster
+
+# Debug: print cluster labels
+print("Cluster labels:", cluster_labels)
+
+# Add the cluster labels to the graph
+cluster_dict = {node: int(label) for node, label in zip(G.nodes(), cluster_labels)}
+nx.set_node_attributes(G, cluster_dict, 'cluster')
+
+# Define custom colors for clusters
+colors = ['#1f77b4', '#ff7f0e']  # Light blue and orange
+
+# Map cluster labels to colors
+node_colors = [colors[label] for label in cluster_labels]
+
+# Define edge labels
+edge_labels = {(u, v): G[u][v]['relation'] for u, v in G.edges()}
+
+# Draw the clustered graph
+plt.figure(figsize=(14, 10))
+nx.draw(G, pos, with_labels=False, node_size=2000, node_color=node_colors, edge_color=[edge_colors[G[u][v]['relation']] for u, v in G.edges()])
+nx.draw_networkx_labels(G, pos, labels, font_size=10)
+nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_size=8)
+
+plt.title("Clustered Graph with Perspective-Taking Relational Frames (DBSCAN Clustering)")
+plt.show()
+
+# Calculate density, volume, and mass for each cluster
+alpha, beta = 1, 1  # Scaling factors for volume
+
+# Define the nodes in each cluster
+cluster_nodes = {label: [] for label in set(cluster_labels)}
+for node, label in cluster_dict.items():
+    cluster_nodes[label].append(node)
+
+# Calculate densities and volumes of clusters
+cluster_densities = {}
+cluster_volumes = {}
+cluster_masses = {}
+for label, nodes in cluster_nodes.items():
+    N = len(nodes)
+    subgraph = G.subgraph(nodes)
+    E = subgraph.number_of_edges()
+    possible_edges = N * (N - 1) / 2
+    D = 2 * E / possible_edges if possible_edges > 0 else 0
+    V = alpha * N + beta * E
+    M = D * V
+    cluster_densities[label] = D
+    cluster_volumes[label] = V
+    cluster_masses[label] = M
+
+# Print density, volume, and mass for each cluster
+for label in cluster_nodes:
+    print(f"Cluster {label}: Density = {cluster_densities[label]:.2f}, Volume = {cluster_volumes[label]}, Mass = {cluster_masses[label]:.2f}")
+
+# Define fitness based on cluster densities
+fitness = {
+    'A_B': cluster_densities[0],  # Assuming cluster 0 is for Person A and Person B
+    'C': cluster_densities[1]     # Assuming cluster 1 is for Person C
+}
+
+# Initialize proportions of clusters
+proportions = {
+    'A_B': 0.5,
+    'C': 0.5
+}
+
+# Update proportions using replicator equation
+def replicator_update(proportions, fitness):
+    total_fitness = sum(proportions[cluster] * fitness[cluster] for cluster in proportions)
+    new_proportions = {
+        cluster: (proportions[cluster] * fitness[cluster]) / total_fitness
+        for cluster in proportions
+    }
+    return new_proportions
+
+# Number of iterations (generations)
+iterations = 50
+
+# Store the history of proportions for plotting
+history = {cluster: [] for cluster in proportions}
+
+# Evolution process
+for _ in range(iterations):
+    for cluster in proportions:
+        history[cluster].append(proportions[cluster])
+    proportions = replicator_update(proportions, fitness)
+
+# Print the final proportions
+print("Final proportions:", proportions)
+
+# Plot the evolution of each cluster's proportion
+plt.figure(figsize=(10, 6))
+for cluster in history:
+    plt.plot(history[cluster], label=cluster)
+plt.xlabel('Iterations')
+plt.ylabel('Proportion')
+plt.title('Evolution of Cluster Proportions Based on Density')
+plt.legend()
+plt.show()
+
+# Calculate density, volume, and mass for visualization
+node_sizes = [2000 * cluster_masses[cluster_dict[node]] for node in G.nodes()]
+
+# Visualize the clusters with node size representing mass
+plt.figure(figsize=(14, 10))
+nx.draw(G, pos, with_labels=False, node_size=node_sizes, node_color=node_colors, edge_color=[edge_colors[G[u][v]['relation']] for u, v in G.edges()])
+nx.draw_networkx_labels(G, pos, labels, font_size=10)
+nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_size=8)
+
+plt.title("Clustered Graph with Perspective-Taking Relational Frames (DBSCAN Clustering, Mass Represented by Node Size)")
+plt.show()
